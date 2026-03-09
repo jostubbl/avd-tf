@@ -172,3 +172,29 @@ resource "azurerm_role_assignment" "session_host_admin" {
   role_definition_name = "Virtual Machine Contributor"
   principal_id         = each.value
 }
+
+###############################################################################
+# Module: msix-storage
+# Customer Cost: Azure Files Premium (per provisioned GB/month) – customer-billable.
+# MSIX App Attach packages are stored here and mounted read-only by session hosts.
+###############################################################################
+module "msix_storage" {
+  source = "./modules/msix-storage"
+
+  resource_group_name             = azurerm_resource_group.storage.name
+  location                        = var.location
+  workload_name                   = var.workload_name
+  environment                     = var.environment
+  msix_share_size_gb              = var.msix_share_size_gb
+  storage_account_replication     = var.storage_account_replication
+  private_endpoint_subnet_id      = module.networking.private_endpoint_subnet_id
+  private_dns_zone_resource_group = azurerm_resource_group.networking.name
+  session_host_vm_principal_ids   = module.session_hosts.vm_principal_ids
+  tags                            = var.tags
+
+  depends_on = [
+    azurerm_resource_group.storage,
+    module.networking,
+    module.session_hosts,
+  ]
+}

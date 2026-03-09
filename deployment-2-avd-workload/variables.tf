@@ -287,3 +287,14 @@ variable "tags" {
     compliance_scope = "fedramp-high"
   }
 }
+
+# ---------------------------------------------------------------------------
+# MSIX App Attach Storage
+# Customer Cost: Premium Azure Files storage (per provisioned GB/month)
+# ---------------------------------------------------------------------------
+
+variable "msix_share_size_gb" {
+  description = "Quota in GB for the MSIX app attach Azure Files share."
+  type        = number
+  default     = 512
+}

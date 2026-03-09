@@ -71,3 +71,18 @@ output "session_host_vm_ids" {
   description = "List of resource IDs for the deployed session host VMs."
   value       = module.session_hosts.vm_ids
 }
+
+output "msix_storage_account_name" {
+  description = "Name of the MSIX App Attach storage account."
+  value       = module.msix_storage.storage_account_name
+}
+
+output "msix_share_name" {
+  description = "Name of the MSIX packages Azure Files share."
+  value       = module.msix_storage.msix_share_name
+}
+
+output "msix_share_url" {
+  description = "UNC path for the MSIX share (Azure Government endpoint)."
+  value       = module.msix_storage.msix_share_url
+}

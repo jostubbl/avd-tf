@@ -1,0 +1,37 @@
+###############################################################################
+# .gitlab-ci.yml – Root pipeline: orchestrates both Terraform deployments
+#
+# This root pipeline includes both deployment pipelines as child pipelines.
+# Each child pipeline can also be triggered independently from its own
+# directory .gitlab-ci.yml (for standalone execution).
+#
+# Execution order:
+#   1. deployment-1-subscription-vending  (platform team, manual apply gate)
+#   2. deployment-2-avd-workload          (customer workload, manual apply gate)
+###############################################################################
+
+stages:
+  - platform
+  - workload
+
+trigger:platform:
+  stage: platform
+  trigger:
+    include:
+      - local: deployment-1-subscription-vending/.gitlab-ci.yml
+    strategy: depend
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+
+trigger:workload:
+  stage: workload
+  trigger:
+    include:
+      - local: deployment-2-avd-workload/.gitlab-ci.yml
+    strategy: depend
+  needs:
+    - trigger:platform
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'

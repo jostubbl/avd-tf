@@ -1,0 +1,97 @@
+###############################################################################
+# .gitlab-ci.yml – Deployment 2: Customer AVD Workload Landing Zone
+#
+# Standard Terraform init → plan → apply workflow for GitLab CI/CD.
+# Runs exclusively against Azure Government (AzureUSGovernment).
+#
+# Required GitLab CI/CD Variables (set at group or project level):
+#   ARM_CLIENT_ID                 – Service principal client ID
+#   ARM_CLIENT_SECRET             – Service principal client secret
+#   ARM_TENANT_ID                 – Azure AD tenant ID
+#   ARM_SUBSCRIPTION_ID           – Customer AVD workload subscription ID
+#                                   (output of Deployment 1)
+#   TF_BACKEND_RG                 – Resource group of Terraform state storage
+#   TF_BACKEND_SA                 – Storage account name for Terraform state
+#   TF_BACKEND_CONTAINER          – Blob container for Terraform state
+#   TF_VAR_avd_subscription_id    – Same as ARM_SUBSCRIPTION_ID
+#   TF_VAR_local_admin_password   – Session host local admin password (secret)
+#   TF_VAR_domain_join_password   – Domain join password if using ADDS (secret)
+###############################################################################
+
+default:
+  image: hashicorp/terraform:1.9.8
+
+variables:
+  TF_IN_AUTOMATION: "true"
+  TF_CLI_ARGS: "-no-color"
+  ARM_ENVIRONMENT: "usgovernment"
+  DEPLOY_DIR: "deployment-2-avd-workload"
+
+stages:
+  - validate
+  - plan
+  - apply
+
+# ---------------------------------------------------------------------------
+# Shared backend-config helper (DRY)
+# ---------------------------------------------------------------------------
+.backend_config: &backend_config
+  - |
+    terraform -chdir="${DEPLOY_DIR}" init \
+      -backend-config="resource_group_name=${TF_BACKEND_RG}" \
+      -backend-config="storage_account_name=${TF_BACKEND_SA}" \
+      -backend-config="container_name=${TF_BACKEND_CONTAINER}" \
+      -backend-config="key=avd-workload/${ARM_SUBSCRIPTION_ID}/terraform.tfstate" \
+      -backend-config="environment=usgovernment" \
+      -input=false \
+      -reconfigure
+
+# ---------------------------------------------------------------------------
+# validate – format check + terraform validate (no state required)
+# ---------------------------------------------------------------------------
+tf:validate:
+  stage: validate
+  script:
+    - terraform -chdir="${DEPLOY_DIR}" fmt -check -recursive
+    - *backend_config
+    - terraform -chdir="${DEPLOY_DIR}" validate
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
+# ---------------------------------------------------------------------------
+# plan – generate execution plan, saved as an artifact
+# ---------------------------------------------------------------------------
+tf:plan:
+  stage: plan
+  script:
+    - *backend_config
+    - |
+      terraform -chdir="${DEPLOY_DIR}" plan \
+        -var="avd_subscription_id=${ARM_SUBSCRIPTION_ID}" \
+        -input=false \
+        -out="${DEPLOY_DIR}/tfplan"
+  artifacts:
+    name: "tfplan-avd-workload"
+    paths:
+      - "${DEPLOY_DIR}/tfplan"
+    expire_in: 7 days
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
+# ---------------------------------------------------------------------------
+# apply – apply the saved plan (main branch only, manual gate)
+# ---------------------------------------------------------------------------
+tf:apply:
+  stage: apply
+  script:
+    - *backend_config
+    - terraform -chdir="${DEPLOY_DIR}" apply -input=false "${DEPLOY_DIR}/tfplan"
+  dependencies:
+    - tf:plan
+  environment:
+    name: customer/avd-workload
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: manual

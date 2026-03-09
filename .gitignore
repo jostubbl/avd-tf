@@ -1,0 +1,19 @@
+# Terraform state and working directories
+**/.terraform/
+**/.terraform.lock.hcl
+
+# Terraform plan files (contain sensitive data)
+**/tfplan
+**/*.tfplan
+
+# Terraform variable override files (may contain secrets)
+*.auto.tfvars
+*.tfvars.json
+
+# Terraform crash log
+crash.log
+crash.*.log
+
+# Sensitive variable files
+*.tfvars
+!*.tfvars.example

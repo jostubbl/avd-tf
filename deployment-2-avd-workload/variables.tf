@@ -19,10 +19,10 @@ variable "location" {
   description = <<-EOT
     Primary Azure Government region for all customer resources.
     Must be an Azure Government–available region.
-    Recommended: usgovvirginia (US Gov Virginia).
+    Default: usgovarizona (US Gov Arizona) per platform requirements.
   EOT
   type        = string
-  default     = "usgovvirginia"
+  default     = "usgovarizona"
 
   validation {
     condition     = contains(["usgovvirginia", "usgovtexas", "usgovarizona"], var.location)
@@ -31,9 +31,18 @@ variable "location" {
 }
 
 variable "environment" {
-  description = "Short environment name used in resource naming (e.g. prod, dev, uat)."
+  description = <<-EOT
+    Deployment environment type.  Must match the value used in Deployment 1.
+      sandbox    – non-production development / test workloads.
+      production – live mission workloads.
+  EOT
   type        = string
-  default     = "prod"
+  default     = "production"
+
+  validation {
+    condition     = contains(["sandbox", "production"], var.environment)
+    error_message = "environment must be 'sandbox' or 'production'."
+  }
 }
 
 variable "workload_name" {
@@ -276,11 +285,48 @@ variable "avd_user_object_ids" {
 # Tags
 # ---------------------------------------------------------------------------
 
+# Required subscription tags (must be consistent with Deployment 1 values)
+
+variable "tag_agency" {
+  description = "Required tag: Federal agency name (e.g. 'DOD', 'DHS', 'VA').  Must match the value set in Deployment 1."
+  type        = string
+}
+
+variable "tag_program_office" {
+  description = "Required tag: Program office within the agency (e.g. 'OCIO', 'J6').  Must match the value set in Deployment 1."
+  type        = string
+}
+
+variable "tag_charge_site" {
+  description = "Required tag: Charge site or cost allocation code.  Must match the value set in Deployment 1."
+  type        = string
+}
+
+variable "tag_project" {
+  description = "Required tag: Project name or project code.  Must match the value set in Deployment 1."
+  type        = string
+}
+
+variable "tag_application_owner" {
+  description = "Required tag: Name or email address of the application/system owner.  Must match the value set in Deployment 1."
+  type        = string
+}
+
+variable "tag_account" {
+  description = "Required tag: Account identifier used for billing, access control, or tracking.  Must match the value set in Deployment 1."
+  type        = string
+}
+
 variable "tags" {
-  description = "Map of tags applied to all resources in this deployment."
+  description = <<-EOT
+    Additional tags merged with the required subscription tags.
+    The six required tags (agency, program-office, charge-site, project,
+    application-owner, account) are always applied from their dedicated
+    variables.  The 'environment' tag is also automatically set from
+    var.environment.  Use this map to add supplementary tags only.
+  EOT
   type        = map(string)
   default = {
-    environment      = "production"
     workload         = "avd"
     cost_center      = "customer"
     managed_by       = "customer-team"

@@ -14,11 +14,33 @@ variable "platform_subscription_id" {
 variable "platform_location" {
   description = "Primary Azure Government region for platform (hub, identity) resources."
   type        = string
-  default     = "usgovvirginia"
+  default     = "usgovarizona"
 
   validation {
     condition     = contains(["usgovvirginia", "usgovtexas", "usgovarizona"], var.platform_location)
     error_message = "platform_location must be an Azure Government region: usgovvirginia, usgovtexas, or usgovarizona."
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Environment
+# ---------------------------------------------------------------------------
+
+variable "environment" {
+  description = <<-EOT
+    Deployment environment type.  Controls subscription workload classification
+    and resource naming throughout this deployment.
+      sandbox    – maps to Azure 'DevTest' subscription workload; for non-production
+                   development and test use cases.
+      production – maps to Azure 'Production' subscription workload; for live
+                   mission workloads.
+  EOT
+  type        = string
+  default     = "production"
+
+  validation {
+    condition     = contains(["sandbox", "production"], var.environment)
+    error_message = "environment must be 'sandbox' or 'production'."
   }
 }
 
@@ -36,20 +58,9 @@ variable "billing_scope_id" {
 }
 
 variable "subscription_name" {
-  description = "Display name for the new customer AVD workload subscription."
+  description = "Display name for the new customer workload subscription."
   type        = string
   default     = "avd-workload-prod"
-}
-
-variable "subscription_workload" {
-  description = "Type of workload for the subscription. Allowed: Production, DevTest."
-  type        = string
-  default     = "Production"
-
-  validation {
-    condition     = contains(["Production", "DevTest"], var.subscription_workload)
-    error_message = "subscription_workload must be 'Production' or 'DevTest'."
-  }
 }
 
 # ---------------------------------------------------------------------------
@@ -58,6 +69,41 @@ variable "subscription_workload" {
 
 variable "management_group_id" {
   description = "The ID (name) of the ALZ workload management group for subscription placement and policy assignments."
+  type        = string
+}
+
+# ---------------------------------------------------------------------------
+# Required Subscription Tags
+# These six tags MUST be present on all resources in this subscription.
+# ---------------------------------------------------------------------------
+
+variable "tag_agency" {
+  description = "Required tag: Federal agency name (e.g. 'DOD', 'DHS', 'VA')."
+  type        = string
+}
+
+variable "tag_program_office" {
+  description = "Required tag: Program office within the agency (e.g. 'OCIO', 'J6')."
+  type        = string
+}
+
+variable "tag_charge_site" {
+  description = "Required tag: Charge site or cost allocation code for billing attribution."
+  type        = string
+}
+
+variable "tag_project" {
+  description = "Required tag: Project name or project code."
+  type        = string
+}
+
+variable "tag_application_owner" {
+  description = "Required tag: Name or email address of the application/system owner."
+  type        = string
+}
+
+variable "tag_account" {
+  description = "Required tag: Account identifier used for billing, access control, or tracking."
   type        = string
 }
 
@@ -247,14 +293,57 @@ variable "policy_enforcement_mode" {
 }
 
 # ---------------------------------------------------------------------------
+# Defender for Cloud & File Integrity Monitoring (FIM)
+# ---------------------------------------------------------------------------
+
+variable "law_id" {
+  description = <<-EOT
+    Resource ID of the CENTRALIZED Log Analytics Workspace to which Defender
+    for Cloud and File Integrity Monitoring (FIM) data will be sent.
+    This workspace is managed by the platform team and shared across all
+    workload subscriptions.
+    Format:
+      /subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.OperationalInsights/workspaces/<name>
+  EOT
+  type        = string
+
+  validation {
+    condition     = can(regex("^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\\.OperationalInsights/workspaces/[^/]+$", var.law_id))
+    error_message = "law_id must be a valid Log Analytics Workspace resource ID."
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Hub Networking (optional – disabled by default)
+# Per spec, Deployment 1 does NOT deploy virtual networks by default.
+# Set deploy_hub_networking = true only when this deployment also manages
+# the platform hub connectivity layer.
+# ---------------------------------------------------------------------------
+
+variable "deploy_hub_networking" {
+  description = <<-EOT
+    Deploy hub networking infrastructure (VNet, Azure Firewall, subnets, route
+    tables) in the platform subscription.  Defaults to false per the requirement
+    that Deployment 1 does not deploy Virtual Networks.  Set to true only when
+    this deployment also manages the platform hub connectivity layer.
+  EOT
+  type        = bool
+  default     = false
+}
+
+# ---------------------------------------------------------------------------
 # Tags
 # ---------------------------------------------------------------------------
 
 variable "tags" {
-  description = "Map of tags to apply to all resources in this deployment."
+  description = <<-EOT
+    Additional tags to merge with the required subscription tags.
+    The six required tags (agency, program-office, charge-site, project,
+    application-owner, account) are always applied automatically from their
+    dedicated variables.  Use this map to add supplementary tags.
+  EOT
   type        = map(string)
   default = {
-    environment      = "production"
     workload         = "avd"
     cost_center      = "platform"
     managed_by       = "platform-team"

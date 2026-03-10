@@ -19,6 +19,26 @@
 data "azurerm_client_config" "current" {}
 
 ###############################################################################
+# Locals
+###############################################################################
+
+locals {
+  # Required subscription tags (must be present on all resources)
+  required_tags = {
+    agency            = var.tag_agency
+    program-office    = var.tag_program_office
+    charge-site       = var.tag_charge_site
+    project           = var.tag_project
+    application-owner = var.tag_application_owner
+    account           = var.tag_account
+    environment       = var.environment
+  }
+
+  # Merge required tags with supplementary tags; required tags take precedence
+  all_tags = merge(var.tags, local.required_tags)
+}
+
+###############################################################################
 # Resource Groups
 # Customer Cost: No direct cost – logical containers only.
 # -----------------------------------------------------------------------------
@@ -31,25 +51,25 @@ data "azurerm_client_config" "current" {}
 resource "azurerm_resource_group" "networking" {
   name     = "rg-${var.workload_name}-networking-${var.environment}"
   location = var.location
-  tags     = merge(var.tags, { cost_owner = "customer", resource_group = "networking" })
+  tags     = merge(local.all_tags, { cost_owner = "customer", resource_group = "networking" })
 }
 
 resource "azurerm_resource_group" "compute" {
   name     = "rg-${var.workload_name}-compute-${var.environment}"
   location = var.location
-  tags     = merge(var.tags, { cost_owner = "customer", resource_group = "compute" })
+  tags     = merge(local.all_tags, { cost_owner = "customer", resource_group = "compute" })
 }
 
 resource "azurerm_resource_group" "storage" {
   name     = "rg-${var.workload_name}-storage-${var.environment}"
   location = var.location
-  tags     = merge(var.tags, { cost_owner = "customer", resource_group = "storage" })
+  tags     = merge(local.all_tags, { cost_owner = "customer", resource_group = "storage" })
 }
 
 resource "azurerm_resource_group" "avd" {
   name     = "rg-${var.workload_name}-avd-${var.environment}"
   location = var.location
-  tags     = merge(var.tags, { cost_owner = "customer", resource_group = "avd-management" })
+  tags     = merge(local.all_tags, { cost_owner = "customer", resource_group = "avd-management" })
 }
 
 ###############################################################################
@@ -69,7 +89,7 @@ module "networking" {
   private_endpoint_subnet_cidr = var.private_endpoint_subnet_cidr
   dns_servers                  = var.dns_servers
   hub_vnet_id                  = var.hub_vnet_id
-  tags                         = var.tags
+  tags                         = local.all_tags
 
   depends_on = [azurerm_resource_group.networking]
 }
@@ -90,7 +110,7 @@ module "profile_storage" {
   storage_account_replication     = var.storage_account_replication
   private_endpoint_subnet_id      = module.networking.private_endpoint_subnet_id
   private_dns_zone_resource_group = azurerm_resource_group.networking.name
-  tags                            = var.tags
+  tags                            = local.all_tags
 
   depends_on = [
     azurerm_resource_group.storage,
@@ -117,7 +137,7 @@ module "avd" {
   workspace_name          = var.avd_workspace_name
   application_group_name  = var.avd_application_group_name
   avd_user_object_ids     = var.avd_user_object_ids
-  tags                    = var.tags
+  tags                    = local.all_tags
 
   depends_on = [azurerm_resource_group.avd]
 }
@@ -150,7 +170,7 @@ module "session_hosts" {
   domain_ou_path               = var.domain_ou_path
   storage_account_name         = module.profile_storage.storage_account_name
   fslogix_share_name           = module.profile_storage.fslogix_share_name
-  tags                         = var.tags
+  tags                         = local.all_tags
 
   depends_on = [
     azurerm_resource_group.compute,
@@ -190,7 +210,7 @@ module "msix_storage" {
   private_endpoint_subnet_id      = module.networking.private_endpoint_subnet_id
   private_dns_zone_resource_group = azurerm_resource_group.networking.name
   session_host_vm_principal_ids   = module.session_hosts.vm_principal_ids
-  tags                            = var.tags
+  tags                            = local.all_tags
 
   depends_on = [
     azurerm_resource_group.storage,
